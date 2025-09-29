@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>WebRTC MVP</title>
+		<style>
+			body {
+				font-family: sans-serif;
+				padding: 16px;
+			}
+			video {
+				width: 45%;
+				border: 1px solid #ccc;
+			}
+			#controls {
+				margin-bottom: 12px;
+			}
+		</style>
+	</head>
+	<body>
+		<h2>WebRTC MVP — áudio/vídeo P2P</h2>
+		<div id="controls">
+			<input
+				id="roomInput"
+				placeholder="nome da sala"
+				value="room1" />
+			<button id="joinBtn">Join</button>
+		</div>
+		<div>
+			<video
+				id="localVideo"
+				autoplay
+				playsinline
+				muted></video>
+			<video
+				id="remoteVideo"
+				autoplay
+				playsinline></video>
+		</div>
+
+		<script src="/client.js"></script>
+	</body>
+</html>
