@@ -3,7 +3,7 @@ const remoteVideo = document.getElementById('remoteVideo');
 const joinBtn = document.getElementById('joinBtn');
 const roomInput = document.getElementById('roomInput');
 
-const ws = new WebSocket(`ws://${location.host}`);
+const ws = new WebSocket(`wss://${location.host}`);
 let pc = null;
 let localStream = null;
 
