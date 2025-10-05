@@ -9,12 +9,34 @@ app.use(express.static(path.join(__dirname, 'public')));
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// Estrutura para controlar salas
 const rooms = {};
 
+// Funções auxiliares
+function broadcastToRoom(room, sender, message) {
+	if (!rooms[room]) return;
+	rooms[room].forEach((client) => {
+		if (client !== sender && client.readyState === WebSocket.OPEN) {
+			client.send(JSON.stringify(message));
+		}
+	});
+}
+
+function removeFromRoom(ws) {
+	const room = ws.room;
+	if (!room || !rooms[room]) return;
+
+	rooms[room] = rooms[room].filter((s) => s !== ws);
+
+	broadcastToRoom(room, ws, { type: 'peer-left' });
+
+	if (rooms[room].length === 0) delete rooms[room];
+}
+
+// Conexão WebSocket
 wss.on('connection', (ws) => {
 	ws.on('message', (message) => {
 		let msg;
-
 		try {
 			msg = JSON.parse(message);
 		} catch (e) {
@@ -24,65 +46,46 @@ wss.on('connection', (ws) => {
 
 		const { type } = msg;
 
-		if (type === 'join') {
-			const room = msg.room;
-			ws.room = room;
-			rooms[room] = rooms[room] || [];
+		switch (type) {
+			case 'join': {
+				const room = msg.room;
+				ws.room = room;
+				rooms[room] = rooms[room] || [];
 
-			console.log('rooms ->', rooms);
+				if (rooms[room].length >= 2) {
+					ws.send(JSON.stringify({ type: 'full' }));
+					return;
+				}
 
-			if (rooms[room].length >= 2) {
-				ws.send(JSON.stringify({ type: 'full' }));
-				return;
+				rooms[room].push(ws);
+
+				const othersCount = rooms[room].length - 1;
+				ws.send(JSON.stringify({ type: 'joined', othersCount }));
+
+				// Avisa os outros da sala
+				broadcastToRoom(room, ws, { type: 'peer-joined' });
+				break;
 			}
 
-			rooms[room].push(ws);
+			case 'offer':
+			case 'answer':
+			case 'ice': {
+				const room = ws.room;
+				broadcastToRoom(room, ws, { type, data: msg.data });
+				break;
+			}
 
-			console.log('rooms 2 ->', rooms);
-
-			const othersCount = rooms[room].length - 1;
-			ws.send(JSON.stringify({ type: 'joined', othersCount }));
-
-			rooms[room].forEach((client) => {
-				console.log('client ->', client);
-				if (client !== ws && client.readyState === WebSocket.OPEN) {
-					client.send(JSON.stringify({ type: 'peer-joined' }));
-				} else if (type === 'offer' || type === 'answer' || type === 'ice') {
-					const room = ws.room;
-					if (!room || !rooms[room]) return;
-					rooms[room].forEach((client) => {
-						if (client !== ws && client.readyState === WebSocket.OPEN) {
-							client.send(JSON.stringify({ type, data: msg.data }));
-						}
-					});
-				} else if (type === 'leave') {
-					const room = ws.room;
-					if (room && rooms[room]) {
-						rooms[room] = rooms[room].filter((s) => s !== ws);
-						rooms[room].forEach((client) => {
-							if (client.readyState === WebSocket.OPEN)
-								client.send(JSON.stringify({ type: 'peer-left' }));
-						});
-						if (rooms[room].length === 0) delete rooms[room];
-					}
-				}
-			});
+			case 'leave': {
+				removeFromRoom(ws);
+				break;
+			}
 		}
 	});
 
 	ws.on('close', () => {
-		const room = ws.room;
-		if (!room || !rooms[room]) return;
-
-		rooms[room] = rooms[room].filter((s) => s !== ws);
-		rooms[room].forEach((client) => {
-			if (client.readyState === WebSocket.OPEN) {
-				client.send(JSON.stringify({ type: 'peer-left' }));
-			}
-		});
-		if (rooms[room].length === 0) delete rooms[room];
+		removeFromRoom(ws);
 	});
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('Servidor rodando na porta 3000'));
+server.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
